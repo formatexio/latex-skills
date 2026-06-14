@@ -84,5 +84,5 @@ Find your key at [formatex.io](https://formatex.io) under **Settings → API Key
 ## Learn More
 
 - [FormaTeX](https://formatex.io) — browser editor, REST API, AI assistant, real-time collaboration
-- [API docs](https://formatex.io/docs) — full API reference
+- [API docs](https://api.formatex.io/api/v1/) — full API reference
 - [Blog](https://formatex.io/blog) — deep-dive posts for each skill in this pack
