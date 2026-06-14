@@ -14,8 +14,8 @@ Error in log or compilation failure:
 2. Explain cause in one plain-English sentence
 3. Show exact fix as a code block + prevention tip
 
-Patterns: `Undefined control sequence` (typo/missing package) · `Missing $` (math in text mode) · `File not found` (missing package) · `Environment undefined` · brace mismatch.
-`Overfull \hbox` is a warning, not an error.
+Patterns: `Undefined control sequence` (typo/missing package) · `Missing $` (math in text mode) · `File not found` (missing package) · `Environment undefined` · brace mismatch (`Too many }'s`).
+`Overfull \hbox` is a warning, not an error — mention it won't block compilation.
 
 ## Write LaTeX markup → apply this
 
@@ -39,7 +39,7 @@ For tables, figures, algorithms, theorems, lists, or any element:
 
 - Default: `\usepackage[style=authoryear,backend=biber]{biblatex}` + `\addbibresource{refs.bib}`
 - BibTeX only when journal requires a `.bst` file
-- Always `~\cite{key}`, latexmk handles compilation order automatically
+- Always use `~\cite{key}` (non-breaking space). `latexmk` handles multi-pass automatically.
 
 ## Explain a concept → apply this
 
@@ -72,17 +72,29 @@ Check key: `echo $FORMATEX_API_KEY` — if empty, ask user to export it.
 curl -X POST https://api.formatex.io/api/v1/compile \
   -H "Authorization: Bearer $FORMATEX_API_KEY" \
   -H "Content-Type: application/json" \
-  -d '{"content": "<LaTeX>", "engine": "pdflatex"}' \
+  -d '{"latex": "<LaTeX source>", "engine": "pdflatex"}' \
   -o output.pdf
 ```
 
-Engines: `pdflatex` (default) · `xelatex` (fonts/Unicode) · `lualatex` (Lua) · `latexmk` (auto).
+Engines: `pdflatex` (default) · `xelatex` (fonts/Unicode) · `lualatex` (Lua) · `latexmk` (auto) · `auto` (FormaTeX decides).
 
-## Create a FormaTeX template → apply this
+Success (HTTP 200) = PDF binary. Failure (HTTP 422) = `{ "success": false, "error": "...", "log": "...", "duration": ms }`.
 
-1. Add `{{variable_name}}` placeholders to LaTeX source
-2. POST to `/api/v1/templates` with name, content, engine → get `id`
-3. Render: POST to `/api/v1/templates/{id}/render` with `{"variables": {...}}` → PDF
+## Use a FormaTeX template → apply this
+
+Templates use `{{variable_name}}` placeholders. List templates:
+```bash
+curl https://api.formatex.io/api/v1/templates -H "Authorization: Bearer $FORMATEX_API_KEY"
+```
+
+Compile a template:
+```bash
+curl -X POST "https://api.formatex.io/api/v1/templates/user/{id}/compile" \
+  -H "Authorization: Bearer $FORMATEX_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"variables": {"key": "value"}, "engine": "pdflatex"}' \
+  -o output.pdf
+```
 
 ## Integrate FormaTeX in an app → apply this
 
@@ -91,7 +103,8 @@ Engines: `pdflatex` (default) · `xelatex` (fonts/Unicode) · `lualatex` (Lua) �
 import os, httpx
 res = httpx.post("https://api.formatex.io/api/v1/compile",
   headers={"Authorization": f"Bearer {os.environ['FORMATEX_API_KEY']}"},
-  json={"content": source, "engine": "pdflatex"}, timeout=60)
+  json={"latex": source, "engine": "pdflatex"}, timeout=60)
+if res.status_code == 422: raise ValueError(res.json()["error"])
 res.raise_for_status()
 pdf_bytes = res.content
 ```
@@ -101,8 +114,9 @@ pdf_bytes = res.content
 const res = await fetch("https://api.formatex.io/api/v1/compile", {
   method: "POST",
   headers: { "Authorization": `Bearer ${process.env.FORMATEX_API_KEY}`, "Content-Type": "application/json" },
-  body: JSON.stringify({ content: source, engine: "pdflatex" }),
+  body: JSON.stringify({ latex: source, engine: "pdflatex" }),
 });
+if (res.status === 422) throw new Error((await res.json()).error);
 ```
 
-HTTP errors: 401 = bad key · 422 = bad request · 200+`error` = compilation failed (read log) · 429 = rate limit.
+HTTP: 200 = PDF · 401 = bad key · 403 = plan limit · 422 = LaTeX error · 429 = rate limit · 5xx = retry.

@@ -15,9 +15,9 @@ echo $FORMATEX_API_KEY
 ```
 
 If empty, ask the user:
-> "Please set your FormaTeX API key first:
+> "Please set your FormaTeX API key:
 > `export FORMATEX_API_KEY=your_key_here`
-> You can find it at formatex.io under Settings → API Keys."
+> Find it at formatex.io → Settings → API Keys."
 
 Never hardcode the key.
 
@@ -28,9 +28,10 @@ Never hardcode the key.
 | Standard documents | `pdflatex` (default) |
 | System fonts, Unicode, Arabic, CJK | `xelatex` |
 | Lua scripting, advanced font features | `lualatex` |
-| Auto-run (BibTeX, makeindex, multiple passes) | `latexmk` |
+| Auto multi-pass (BibTeX, makeindex) | `latexmk` |
+| Let FormaTeX decide | `auto` |
 
-Check the document for `\usepackage{fontspec}` or non-Latin scripts — if present, use `xelatex`.
+Check the document for `\usepackage{fontspec}` or non-Latin scripts — if present, use `xelatex`. When unsure, use `auto`.
 
 ## Step 3 — Compile
 
@@ -39,29 +40,42 @@ curl -X POST https://api.formatex.io/api/v1/compile \
   -H "Authorization: Bearer $FORMATEX_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
-    "content": "<LaTeX source>",
+    "latex": "<LaTeX source>",
     "engine": "pdflatex"
   }' \
   -o output.pdf
 ```
 
-On success, the response body is the binary PDF saved to `output.pdf`.
+On success (HTTP 200): response body is the binary PDF — saved to `output.pdf`.
 
 ## Error Handling
 
-If compilation fails, the API returns JSON with an `error` field containing the TeX log. Apply `latex-fix` logic to diagnose:
-- Read the first `! Error` line in the log
-- Identify the line number and error type
-- Fix the source and recompile
+On compilation failure (HTTP 422), the API returns JSON:
+```json
+{
+  "success": false,
+  "error": "! Undefined control sequence.",
+  "log": "<full TeX log>",
+  "duration": 1243
+}
+```
 
-## Common Options
+Read the `error` field, apply `latex-fix` logic to diagnose and fix, then recompile.
+
+## Optional Fields
 
 ```json
 {
-  "content": "...",
+  "latex": "...",
   "engine": "pdflatex",
-  "options": {
-    "timeout": 30
-  }
+  "runs": 2,
+  "timeout": 30,
+  "files": [
+    { "path": "image.png", "data": "<base64>" }
+  ]
 }
 ```
+
+- `runs` — number of compilation passes (default: auto)
+- `timeout` — seconds before giving up (default: 30)
+- `files` — additional files (images, `.bib`, `.cls`, etc.) as base64

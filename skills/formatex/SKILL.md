@@ -9,8 +9,6 @@ Handles all FormaTeX platform tasks plus LaTeX error fixing. Route based on what
 
 ## Compile via API → apply this
 
-When the user wants to compile LaTeX using FormaTeX:
-
 **Check API key first:**
 ```bash
 echo $FORMATEX_API_KEY
@@ -22,52 +20,50 @@ If empty: ask the user to `export FORMATEX_API_KEY=your_key_here` (find it at fo
 curl -X POST https://api.formatex.io/api/v1/compile \
   -H "Authorization: Bearer $FORMATEX_API_KEY" \
   -H "Content-Type: application/json" \
-  -d '{"content": "<LaTeX source>", "engine": "pdflatex"}' \
+  -d '{"latex": "<LaTeX source>", "engine": "pdflatex"}' \
   -o output.pdf
 ```
 
-**Engine selection:** `pdflatex` (default) · `xelatex` (system fonts, Unicode) · `lualatex` (Lua scripting) · `latexmk` (auto multi-pass).
+**Engine selection:** `pdflatex` (default) · `xelatex` (system fonts, Unicode) · `lualatex` (Lua) · `latexmk` (auto multi-pass) · `auto` (FormaTeX decides).
 
-Check the document for `\usepackage{fontspec}` or non-Latin scripts — if present, use `xelatex`.
+Check the document for `\usepackage{fontspec}` or non-Latin scripts — if present, use `xelatex`. When unsure, use `auto`.
 
-On error: the API returns JSON with an `error` field containing the TeX log — apply the error-fix flow below.
+**Success (HTTP 200):** response body is binary PDF.
+**Failure (HTTP 422):** `{ "success": false, "error": "...", "log": "...", "duration": ms }` — apply error-fix flow below.
 
 ## Fix a compilation error → apply this
 
-When the API returns an error or the LaTeX itself won't compile:
-1. Read the first `! Error` line in the log
+When the API returns 422 or the LaTeX itself won't compile:
+1. Read the `error` field or the first `! Error` line in the log
 2. Explain the cause in one plain-English sentence
 3. Show the exact fix as a code block
 4. Re-run the compilation after fixing
 
-Common patterns: `Undefined control sequence` (typo or missing package) · `Missing $` (math in text mode) · `Environment undefined` (wrong name or missing package).
+Common patterns: `Undefined control sequence` (typo or missing package) · `Missing $` (math in text mode) · `Environment undefined` (wrong name or missing package) · brace mismatch (`Too many }'s`).
 
-## Create a template → apply this
+## Use a template → apply this
 
-When the user wants a reusable FormaTeX template:
-
-1. Replace dynamic values with `{{variable_name}}` placeholders (lowercase, underscores, no spaces)
-2. Create the template:
+**List templates:**
 ```bash
-curl -X POST https://api.formatex.io/api/v1/templates \
-  -H "Authorization: Bearer $FORMATEX_API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{"name": "Template Name", "content": "<LaTeX with {{placeholders}}>", "engine": "pdflatex"}'
+curl https://api.formatex.io/api/v1/templates \
+  -H "Authorization: Bearer $FORMATEX_API_KEY"
 ```
-3. Save the returned `id`.
 
-**Render it:**
+**Compile a template with variables:**
 ```bash
-curl -X POST https://api.formatex.io/api/v1/templates/{id}/render \
+curl -X POST "https://api.formatex.io/api/v1/templates/user/{template_id}/compile" \
   -H "Authorization: Bearer $FORMATEX_API_KEY" \
   -H "Content-Type: application/json" \
-  -d '{"variables": {"variable_name": "value"}}' \
+  -d '{
+    "variables": { "recipient_name": "Alice", "date": "2026-06-14" },
+    "engine": "pdflatex"
+  }' \
   -o output.pdf
 ```
 
-## Integrate in an application → apply this
+Templates use `{{variable_name}}` placeholders. Create and manage templates at formatex.io or via the dashboard.
 
-When the user wants to use FormaTeX in their code:
+## Integrate in an application → apply this
 
 **Python:**
 ```python
@@ -77,11 +73,13 @@ def compile_latex(source: str, engine: str = "pdflatex") -> bytes:
     res = httpx.post(
         "https://api.formatex.io/api/v1/compile",
         headers={"Authorization": f"Bearer {os.environ['FORMATEX_API_KEY']}"},
-        json={"content": source, "engine": engine},
+        json={"latex": source, "engine": engine},
         timeout=60,
     )
+    if res.status_code == 422:
+        raise ValueError(res.json().get("error", "Compilation failed"))
     res.raise_for_status()
-    return res.content
+    return res.content  # PDF bytes
 ```
 
 **JavaScript:**
@@ -93,11 +91,12 @@ async function compileLaTeX(source, engine = "pdflatex") {
       "Authorization": `Bearer ${process.env.FORMATEX_API_KEY}`,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ content: source, engine }),
+    body: JSON.stringify({ latex: source, engine }),
   });
-  if (!res.ok) throw new Error((await res.json()).error ?? "Failed");
+  if (res.status === 422) throw new Error((await res.json()).error);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
   return Buffer.from(await res.arrayBuffer());
 }
 ```
 
-**Error handling:** HTTP 401 = bad key · HTTP 422 = bad request · HTTP 200 + `error` field = compilation failed (read the log) · HTTP 429 = rate limited, back off.
+**HTTP status reference:** 200 = PDF · 401 = bad key · 403 = plan limit · 422 = LaTeX error · 429 = rate limit (check `Retry-After`) · 5xx = retry with backoff.

@@ -20,9 +20,11 @@ def compile_latex(source: str, engine: str = "pdflatex") -> bytes:
     response = httpx.post(
         "https://api.formatex.io/api/v1/compile",
         headers={"Authorization": f"Bearer {os.environ['FORMATEX_API_KEY']}"},
-        json={"content": source, "engine": engine},
+        json={"latex": source, "engine": engine},
         timeout=60,
     )
+    if response.status_code == 422:
+        raise ValueError(response.json().get("error", "Compilation failed"))
     response.raise_for_status()
     return response.content  # PDF bytes
 
@@ -41,12 +43,13 @@ async function compileLaTeX(source, engine = "pdflatex") {
       "Authorization": `Bearer ${process.env.FORMATEX_API_KEY}`,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ content: source, engine }),
+    body: JSON.stringify({ latex: source, engine }),
   });
-  if (!res.ok) {
+  if (res.status === 422) {
     const err = await res.json();
     throw new Error(err.error ?? "Compilation failed");
   }
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
   return Buffer.from(await res.arrayBuffer()); // PDF buffer
 }
 ```
@@ -57,9 +60,25 @@ async function compileLaTeX(source, engine = "pdflatex") {
 curl -X POST https://api.formatex.io/api/v1/compile \
   -H "Authorization: Bearer $FORMATEX_API_KEY" \
   -H "Content-Type: application/json" \
-  -d '{"content": "\\documentclass{article}\\begin{document}Hello\\end{document}", "engine": "pdflatex"}' \
+  -d '{"latex": "\\documentclass{article}\\begin{document}Hello\\end{document}", "engine": "pdflatex"}' \
   -o output.pdf
 ```
+
+## Request Body
+
+```json
+{
+  "latex": "<LaTeX source>",
+  "engine": "pdflatex",
+  "runs": 2,
+  "timeout": 30,
+  "files": [
+    { "path": "image.png", "data": "<base64-encoded bytes>" }
+  ]
+}
+```
+
+`latex` is required. All other fields are optional.
 
 ## Available Engines
 
@@ -69,14 +88,15 @@ curl -X POST https://api.formatex.io/api/v1/compile \
 | `xelatex` | System fonts, Unicode, non-Latin scripts |
 | `lualatex` | Lua scripting, advanced font features |
 | `latexmk` | Auto multi-pass (BibTeX, makeindex) |
+| `auto` | Let FormaTeX detect the right engine |
 
-## Error Handling Reference
+## HTTP Response Reference
 
-| HTTP status | Meaning |
-|---|---|
-| `200` + PDF body | Success |
-| `200` + JSON with `error` field | Compilation failed — read `error` for the TeX log |
-| `401` | Invalid or missing API key |
-| `422` | Malformed request body |
-| `429` | Rate limit exceeded — back off and retry |
-| `5xx` | Server error — retry with exponential backoff |
+| Status | Meaning | Body |
+|---|---|---|
+| `200` | Success | Binary PDF |
+| `401` | Invalid or missing API key | `{ "error": "..." }` |
+| `403` | Plan limit reached | `{ "error": "..." }` |
+| `422` | Compilation failed | `{ "success": false, "error": "...", "log": "...", "duration": ms }` |
+| `429` | Rate limit exceeded | `{ "error": "..." }` + `Retry-After` header |
+| `5xx` | Server error | Retry with exponential backoff |
