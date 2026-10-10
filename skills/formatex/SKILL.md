@@ -18,7 +18,7 @@ If empty: ask the user to `export FORMATEX_API_KEY=your_key_here` (find it at fo
 **Compile:**
 ```bash
 curl -X POST https://api.formatex.io/api/v1/compile \
-  -H "Authorization: Bearer $FORMATEX_API_KEY" \
+  -H "X-API-Key: $FORMATEX_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{"latex": "<LaTeX source>", "engine": "pdflatex"}' \
   -o output.pdf
@@ -46,13 +46,13 @@ Common patterns: `Undefined control sequence` (typo or missing package) · `Miss
 **List templates:**
 ```bash
 curl https://api.formatex.io/api/v1/templates \
-  -H "Authorization: Bearer $FORMATEX_API_KEY"
+  -H "X-API-Key: $FORMATEX_API_KEY"
 ```
 
 **Compile a template with variables:**
 ```bash
 curl -X POST "https://api.formatex.io/api/v1/templates/user/{template_id}/compile" \
-  -H "Authorization: Bearer $FORMATEX_API_KEY" \
+  -H "X-API-Key: $FORMATEX_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
     "variables": { "recipient_name": "Alice", "date": "2026-06-14" },
@@ -61,7 +61,7 @@ curl -X POST "https://api.formatex.io/api/v1/templates/user/{template_id}/compil
   -o output.pdf
 ```
 
-Templates use `{{variable_name}}` placeholders. Create and manage templates at formatex.io or via the dashboard.
+Templates use `<<variable_name>>` placeholders. Create and manage templates at formatex.io or via the dashboard.
 
 ## Integrate in an application → apply this
 
@@ -72,7 +72,7 @@ import os, httpx
 def compile_latex(source: str, engine: str = "pdflatex") -> bytes:
     res = httpx.post(
         "https://api.formatex.io/api/v1/compile",
-        headers={"Authorization": f"Bearer {os.environ['FORMATEX_API_KEY']}"},
+        headers={"X-API-Key": os.environ["FORMATEX_API_KEY"]},
         json={"latex": source, "engine": engine},
         timeout=60,
     )
@@ -88,7 +88,7 @@ async function compileLaTeX(source, engine = "pdflatex") {
   const res = await fetch("https://api.formatex.io/api/v1/compile", {
     method: "POST",
     headers: {
-      "Authorization": `Bearer ${process.env.FORMATEX_API_KEY}`,
+      "X-API-Key": process.env.FORMATEX_API_KEY,
       "Content-Type": "application/json",
     },
     body: JSON.stringify({ latex: source, engine }),
@@ -99,4 +99,4 @@ async function compileLaTeX(source, engine = "pdflatex") {
 }
 ```
 
-**HTTP status reference:** 200 = PDF · 401 = bad key · 403 = plan limit · 422 = LaTeX error · 429 = rate limit (check `Retry-After`) · 5xx = retry with backoff.
+**HTTP status reference:** 200 = PDF · 401 = missing key · 403 = invalid key or plan limit · 422 = LaTeX error · 429 = rate limit (check `Retry-After`) · 5xx = retry with backoff.

@@ -37,7 +37,7 @@ Check the document for `\usepackage{fontspec}` or non-Latin scripts — if prese
 
 ```bash
 curl -X POST https://api.formatex.io/api/v1/compile \
-  -H "Authorization: Bearer $FORMATEX_API_KEY" \
+  -H "X-API-Key: $FORMATEX_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
     "latex": "<LaTeX source>",

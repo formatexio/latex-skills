@@ -6,7 +6,7 @@ description: Use when the user wants to integrate the FormaTeX API into their ap
 # FormaTeX API Integration
 
 **Base URL:** `https://api.formatex.io/api/v1/`
-**Auth:** `Authorization: Bearer $FORMATEX_API_KEY` on every request.
+**Auth:** `X-API-Key: $FORMATEX_API_KEY` on every request (not `Authorization: Bearer`, which the REST API rejects with `401`).
 
 Never hardcode API keys — always read from environment variables.
 
@@ -19,7 +19,7 @@ import httpx
 def compile_latex(source: str, engine: str = "pdflatex") -> bytes:
     response = httpx.post(
         "https://api.formatex.io/api/v1/compile",
-        headers={"Authorization": f"Bearer {os.environ['FORMATEX_API_KEY']}"},
+        headers={"X-API-Key": os.environ["FORMATEX_API_KEY"]},
         json={"latex": source, "engine": engine},
         timeout=60,
     )
@@ -40,7 +40,7 @@ async function compileLaTeX(source, engine = "pdflatex") {
   const res = await fetch("https://api.formatex.io/api/v1/compile", {
     method: "POST",
     headers: {
-      "Authorization": `Bearer ${process.env.FORMATEX_API_KEY}`,
+      "X-API-Key": process.env.FORMATEX_API_KEY,
       "Content-Type": "application/json",
     },
     body: JSON.stringify({ latex: source, engine }),
@@ -58,7 +58,7 @@ async function compileLaTeX(source, engine = "pdflatex") {
 
 ```bash
 curl -X POST https://api.formatex.io/api/v1/compile \
-  -H "Authorization: Bearer $FORMATEX_API_KEY" \
+  -H "X-API-Key: $FORMATEX_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{"latex": "\\documentclass{article}\\begin{document}Hello\\end{document}", "engine": "pdflatex"}' \
   -o output.pdf
@@ -95,8 +95,8 @@ curl -X POST https://api.formatex.io/api/v1/compile \
 | Status | Meaning | Body |
 |---|---|---|
 | `200` | Success | Binary PDF |
-| `401` | Invalid or missing API key | `{ "error": "..." }` |
-| `403` | Plan limit reached | `{ "error": "..." }` |
+| `401` | Missing API key (send `X-API-Key`) | `{ "error": "missing API key" }` |
+| `403` | Invalid API key, or a plan limit or engine not allowed | `{ "error": "..." }` |
 | `422` | Compilation failed | `{ "success": false, "error": "...", "log": "...", "duration": ms }` |
 | `429` | Rate limit exceeded | `{ "error": "..." }` + `Retry-After` header |
 | `5xx` | Server error | Retry with exponential backoff |

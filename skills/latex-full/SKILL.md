@@ -70,7 +70,7 @@ Check key: `echo $FORMATEX_API_KEY` — if empty, ask user to export it.
 
 ```bash
 curl -X POST https://api.formatex.io/api/v1/compile \
-  -H "Authorization: Bearer $FORMATEX_API_KEY" \
+  -H "X-API-Key: $FORMATEX_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{"latex": "<LaTeX source>", "engine": "pdflatex"}' \
   -o output.pdf
@@ -82,15 +82,15 @@ Success (HTTP 200) = PDF binary. Failure (HTTP 422) = `{ "success": false, "erro
 
 ## Use a FormaTeX template → apply this
 
-Templates use `{{variable_name}}` placeholders. List templates:
+Templates use `<<variable_name>>` placeholders. List templates:
 ```bash
-curl https://api.formatex.io/api/v1/templates -H "Authorization: Bearer $FORMATEX_API_KEY"
+curl https://api.formatex.io/api/v1/templates -H "X-API-Key: $FORMATEX_API_KEY"
 ```
 
 Compile a template:
 ```bash
 curl -X POST "https://api.formatex.io/api/v1/templates/user/{id}/compile" \
-  -H "Authorization: Bearer $FORMATEX_API_KEY" \
+  -H "X-API-Key: $FORMATEX_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{"variables": {"key": "value"}, "engine": "pdflatex"}' \
   -o output.pdf
@@ -102,7 +102,7 @@ curl -X POST "https://api.formatex.io/api/v1/templates/user/{id}/compile" \
 # Python
 import os, httpx
 res = httpx.post("https://api.formatex.io/api/v1/compile",
-  headers={"Authorization": f"Bearer {os.environ['FORMATEX_API_KEY']}"},
+  headers={"X-API-Key": os.environ["FORMATEX_API_KEY"]},
   json={"latex": source, "engine": "pdflatex"}, timeout=60)
 if res.status_code == 422: raise ValueError(res.json()["error"])
 res.raise_for_status()
@@ -113,7 +113,7 @@ pdf_bytes = res.content
 // JavaScript
 const res = await fetch("https://api.formatex.io/api/v1/compile", {
   method: "POST",
-  headers: { "Authorization": `Bearer ${process.env.FORMATEX_API_KEY}`, "Content-Type": "application/json" },
+  headers: { "X-API-Key": process.env.FORMATEX_API_KEY, "Content-Type": "application/json" },
   body: JSON.stringify({ latex: source, engine: "pdflatex" }),
 });
 if (res.status === 422) throw new Error((await res.json()).error);
